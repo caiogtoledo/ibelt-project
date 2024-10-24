@@ -151,15 +151,27 @@ chatbot = CustomDataChatbot(faq_data)
 
 
 def main():
+    # Inicializa uma lista para armazenar o histórico de mensagens
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
     user_query = st.chat_input(
         placeholder="Tem alguma dúvida sobre a PierX?")
 
     if user_query:
+        # Adiciona a mensagem do usuário ao histórico
+        st.session_state.chat_history.append(("user", user_query))
+
+        # Obtém a resposta do chatbot
         resposta = chatbot.responder_pergunta_com_historico(user_query)
 
-        # Exibir a resposta do assistente
-        with st.chat_message("assistant"):
-            st.write(resposta)
+        # Adiciona a resposta do assistente ao histórico
+        st.session_state.chat_history.append(("assistant", resposta))
+
+    # Exibe todas as mensagens no histórico
+    for role, message in st.session_state.chat_history:
+        with st.chat_message(role):
+            st.write(message)
 
 
 if __name__ == "__main__":
