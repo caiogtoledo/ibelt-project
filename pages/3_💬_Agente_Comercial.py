@@ -45,6 +45,10 @@ class CommercialAgentChatbot:
         Se o usuário se qualificar como um potencial cliente, informe que você irá encaminhar suas informações para a equipe comercial, que entrará em contato em breve.
         Caso contrário, agradeça o interesse e forneça informações úteis ou sugestões para futuras interações.
         
+        # Quem não é um cliente ideal e já pode ser descartado?
+        - Empresas que são MEI, ONG ou pessoa física.
+        - Busca lei de incentivo para Arte, Esporte, Cultura, Social.
+
         #Regras:
         - Não forneça informações pessoais ou confidenciais.
         - Não responda sobre preços, valores e investimentos nos nossos serviços, isso é um especialista que irá responder.
@@ -67,6 +71,35 @@ class CommercialAgentChatbot:
         except Exception as e:
             return f"Erro ao obter resposta: {str(e)}"
 
+    def save_lead_data(self, question, awnser):
+        print(f"Acessando lead_data da classe: {self.lead_data}")
+        prompt = "\n".join(
+            [
+                f"Informações do Lead atual: {self.lead_data}\n",
+                f"Pergunta do sistema para ajudar na classificação do atributo: {question}", f"Nova resposta do Usuário: {awnser}\n",
+                "Não apague informações já existentes, apenas concatene as novas informações em um novo JSON."
+            ])
+        system_prompt = """
+        Sua tarefa é mesclar as novas informações ao JSON existente.
+        - Mantenha todas as chaves e valores anteriores.
+        - Adicione apenas novas chaves ou atualize valores se forem mais específicos.
+        - Formate a saída como JSON válido.
+        """
+        try:
+            resposta = OpenAI(api_key=os.environ.get("OPENAI_API_KEY")).chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                ]+[{"role": "user", "content": prompt}],
+            )
+            resposta_texto = resposta.choices[0].message.content.strip()
+            resposta_texto = resposta_texto.replace(
+                "```json", "").replace("```", "").strip()
+            self.lead_data = resposta_texto
+            return resposta_texto
+        except Exception as e:
+            return f"Erro ao obter resposta: {str(e)}"
+
     def setLeadData(self, lead_data):
         self.lead_data = lead_data
 
@@ -83,34 +116,7 @@ if 'chatbot' not in st.session_state:
 # chatbot = CommercialAgentChatbot()
 
 
-def save_lead_data(history_lead_data, new_lead_data):
-    print(f"Acessando lead_data da classe: {history_lead_data}")
-    prompt = "\n".join(
-        [f"Informações do Lead atual: {history_lead_data}\n", f"Nova resposta do Usuário: {new_lead_data}\n",
-            "Não apague informações já existentes, apenas concatene as novas informações em um novo JSON."])
-    system_prompt = """
-    Sua tarefa é mesclar as novas informações ao JSON existente.
-    - Mantenha todas as chaves e valores anteriores.
-    - Adicione apenas novas chaves ou atualize valores se forem mais específicos.
-    - Formate a saída como JSON válido.
-    """
-    try:
-        resposta = OpenAI(api_key=os.environ.get("OPENAI_API_KEY")).chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-            ]+[{"role": "user", "content": prompt}],
-        )
-        resposta_texto = resposta.choices[0].message.content.strip()
-        resposta_texto = resposta_texto.replace(
-            "```json", "").replace("```", "").strip()
-        return resposta_texto
-    except Exception as e:
-        return f"Erro ao obter resposta: {str(e)}"
-
 # Função principal para o aplicativo
-
-
 def main():
     # Inicializa uma lista para armazenar o histórico de mensagens
     if "chat_history" not in st.session_state:
@@ -131,12 +137,12 @@ def main():
             user_query)
 
         # Coleta informações do lead
-        print(
-            f"Lead data antes de passar pro save_lead_data: {st.session_state.chatbot.lead_data}")
-        new_lead_data = save_lead_data(
-            st.session_state.chatbot.lead_data, user_query)
+        print("última pergunta do sistema: ",
+              st.session_state.chat_history[-2][1])
+        new_lead_data = st.session_state.chatbot.save_lead_data(
+            st.session_state.chat_history[-2][1], user_query)
         st.session_state.chatbot.setLeadData(new_lead_data)
-        print("Lead Data Dentro da Main: ", st.session_state.chatbot.lead_data)
+        print("Lead Data: ", st.session_state.chatbot.lead_data)
         # Adiciona a resposta do assistente ao histórico
         st.session_state.chat_history.append(("assistant", resposta))
 
