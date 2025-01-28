@@ -62,7 +62,7 @@ class CommercialAgentChatbot:
             self.historico_conversa.append(
                 {"role": "user", "content": pergunta})
             self.historico_conversa.append(
-                {"role": "system", "content": resposta_texto})
+                {"role": "assistant", "content": resposta_texto})
             return resposta_texto
         except Exception as e:
             return f"Erro ao obter resposta: {str(e)}"
@@ -76,9 +76,11 @@ st.set_page_config(page_title="Agente Comercial", page_icon="📄")
 st.image("https://dev.pierxinovacao.com.br/assets/img/logo.svg", width=120)
 st.header('Fale com o Agente Comercial')
 
-
 # Instancia o chatbot
-chatbot = CommercialAgentChatbot()
+if 'chatbot' not in st.session_state:
+    st.session_state.chatbot = CommercialAgentChatbot()
+
+# chatbot = CommercialAgentChatbot()
 
 
 def save_lead_data(history_lead_data, new_lead_data):
@@ -87,13 +89,10 @@ def save_lead_data(history_lead_data, new_lead_data):
         [f"Informações do Lead atual: {history_lead_data}\n", f"Nova resposta do Usuário: {new_lead_data}\n",
             "Não apague informações já existentes, apenas concatene as novas informações em um novo JSON."])
     system_prompt = """
-    Você é um assistente que armazena informações sobre leads qualificados para a equipe comercial da Pieracciani.
-    Você irá receber as informações já existentes e as novas.
-    Sua função é concatenar a informação de forma estruturada no formato JSON.
-    #Regras:
-    - Não sobrescreva informações já existentes.
-    - Use APENAS informações relevantes para a equipe comercial.
-    - Sempre use o formato JSON como resposta
+    Sua tarefa é mesclar as novas informações ao JSON existente.
+    - Mantenha todas as chaves e valores anteriores.
+    - Adicione apenas novas chaves ou atualize valores se forem mais específicos.
+    - Formate a saída como JSON válido.
     """
     try:
         resposta = OpenAI(api_key=os.environ.get("OPENAI_API_KEY")).chat.completions.create(
@@ -116,9 +115,9 @@ def main():
     # Inicializa uma lista para armazenar o histórico de mensagens
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-
-    st.session_state.chat_history.append(
-        ("assistant", "Olá, sou o Agente Comercial da Pieracciani. \nQual o seu nome?"))
+        if len(st.session_state.chat_history) == 0:
+            st.session_state.chat_history.append(
+                ("assistant", "Olá, sou o Agente Comercial da Pieracciani. \nQual o seu nome?"))
 
     user_query = st.chat_input(
         placeholder="Como podemos te auxiliar?")
@@ -128,19 +127,18 @@ def main():
         st.session_state.chat_history.append(("user", user_query))
 
         # Obtém a resposta do chatbot
-        resposta = chatbot.responder_pergunta_com_historico(user_query)
+        resposta = st.session_state.chatbot.responder_pergunta_com_historico(
+            user_query)
 
         # Coleta informações do lead
         print(
-            f"Lead data antes de passar pro save_lead_data: {chatbot.lead_data}")
-        new_lead_data = save_lead_data(chatbot.lead_data, user_query)
-        chatbot.setLeadData(new_lead_data)
-        print("Lead Data Dentro da Main: ", chatbot.lead_data)
+            f"Lead data antes de passar pro save_lead_data: {st.session_state.chatbot.lead_data}")
+        new_lead_data = save_lead_data(
+            st.session_state.chatbot.lead_data, user_query)
+        st.session_state.chatbot.setLeadData(new_lead_data)
+        print("Lead Data Dentro da Main: ", st.session_state.chatbot.lead_data)
         # Adiciona a resposta do assistente ao histórico
         st.session_state.chat_history.append(("assistant", resposta))
-
-        if st.session_state.chat_history[0] == st.session_state.chat_history[1]:
-            st.session_state.chat_history.pop(0)
 
     # Exibe todas as mensagens no histórico
     for role, message in st.session_state.chat_history:
